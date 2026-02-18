@@ -45,7 +45,7 @@ public sealed class AppDbContext : DbContext {
             b.HasOne(x => x.Link)
                 .WithMany(l => l.Clicks)
                 .HasForeignKey(x => x.LinkId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Cascade); // not keeping track of clicks for dead links
         });
     }
 }
