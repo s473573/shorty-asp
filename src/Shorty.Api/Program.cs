@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Shorty.Api.Data;
+using Shorty.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +14,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     var cs = builder.Configuration.GetConnectionString("ShortyDb") ?? "Data Source=shorty.db";
     options.UseSqlite(cs); // null-leak prevented
 });
+
+builder.Services.AddSingleton<ISlugGenerator, SlugGenerator>();
 
 var app = builder.Build();
 
