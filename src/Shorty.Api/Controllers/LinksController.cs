@@ -1,4 +1,6 @@
+using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using Shorty.Api.Data;
 using Shorty.Api.Data.Entities;
@@ -57,11 +59,80 @@ public sealed class LinksController : ControllerBase
     }
     
     [HttpGet]
+    public async Task<ActionResult<PagedResponse<LinkResponse>>> List(
+        [FromQuery] int pageNum = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        pageNum = Math.Max(1, pageNum);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        
+        var userId = await GetCurrentUserId(ct);
+        
+        var query = _db.Links
+            .AsNoTracking()
+            .Where(l => l.UserId == userId)
+            .OrderByDescending(l => l.Clicks.LongCount());
+        
+        var total = await query.CountAsync(ct);
+        
+        var items = await query
+            .Skip((pageNum-1) * pageSize)
+            .Take(pageSize)
+            .Select(l => ToDto(l))
+            .ToListAsync(ct);
+        
+        return Ok(new PagedResponse<LinkResponse>
+        {
+            Items = items,
+            PageNum = pageNum,
+            PageSize = pageSize,
+            TotalCount = total
+        });
+    }
+    
+    [HttpGet("{id:guid}")]
     public async Task<ActionResult<LinkResponse>> GetById(Guid id, CancellationToken ct)
     {
-        var link = await _db.Links.FirstOrDefaultAsync(l => l.Id == id, ct);
+        var userId = await GetCurrentUserId(ct);
+
+        var dto = await _db.Links
+            .AsNoTracking()
+            .Where(l => l.Id == id && l.UserId == userId)
+            .Select(l => new LinkDetailsResponse
+            {
+                Id = l.Id,
+                Slug = l.Slug,
+                Url = l.Url,
+                IsActive = l.IsActive,
+                CreatedAt = l.createdAt,
+                TotalClicks = l.Clicks.LongCount()
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (dto is null) return NotFound();
+        return Ok(dto);
+    }
+    
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    {
+        var userId = await GetCurrentUserId(ct);
+        
+        var link = await _db.Links
+            .FirstOrDefaultAsync(l => l.Id == id && l.UserId == userId, ct);
+        
         if (link is null) return NotFound();
-        return Ok(ToDto(link));
+        
+        link.IsActive = false;
+        await _db.SaveChangesAsync(ct);
+        
+        return NoContent();
+    }
+    
+    private async Task<Guid> GetCurrentUserId(CancellationToken ct)
+    {
+        // seeded single user, swap to API-key user resolution at a later stage
+        return await _db.Users.OrderBy(u => u.Name).Select(u => u.Id).FirstAsync(ct);
     }
     
     private static LinkResponse ToDto(Link l) => new()

@@ -1,6 +1,6 @@
 namespace Shorty.Api.Dtos;
 
-public sealed class LinkResponse
+public class LinkResponse
 {
     public required Guid Id { get; init; }
     public required string Slug { get; init; }
